@@ -1,12 +1,10 @@
-require 'spec_helper'
-
-describe NoticesController do
+describe NoticesController, type: 'controller' do
   it_requires_authentication :for => { :locate => :get }
 
   let(:notice) { Fabricate(:notice) }
   let(:xml) { Rails.root.join('spec','fixtures','hoptoad_test_notice.xml').read }
   let(:app) { Fabricate(:app) }
-  let(:error_report) { double(:valid? => true, :generate_notice! => true, :notice => notice) }
+  let(:error_report) { double(:valid? => true, :generate_notice! => true, :notice => notice, :should_keep? => true) }
 
   context 'notices API' do
     context "with all params" do
@@ -78,6 +76,4 @@ describe NoticesController do
       end
     end
   end
-
 end
-

@@ -6,33 +6,27 @@
 # COLLECTION => :index, :all, :destroy_several, :resolve_several, :unresolve_several, :merge_several, :unmerge_several, :search
 class ProblemsController < ApplicationController
 
-
   include ProblemsSearcher
 
-  before_filter :need_selected_problem, :only => [
+  before_action :need_selected_problem, :only => [
     :resolve_several, :unresolve_several, :unmerge_several
   ]
 
+  expose(:app_scope) {
+    apps = current_user.admin? ? App.all : current_user.apps
+    params[:app_id] ? apps.where(:_id => params[:app_id]) : apps
+  }
+
   expose(:app) {
-    if current_user.admin?
-      App.find(params[:app_id])
-    else
-      current_user.apps.find(params[:app_id])
-    end
+    AppDecorator.new app_scope.find(params[:app_id])
   }
 
   expose(:problem) {
     app.problems.find(params[:id])
   }
 
-
   expose(:all_errs) {
     params[:all_errs]
-  }
-
-  expose(:app_scope) {
-    apps = current_user.admin? ? App.all : current_user.apps
-    params[:app_id] ? apps.where(:_id => params[:app_id]) : apps
   }
 
   expose(:params_environement) {
@@ -62,11 +56,11 @@ class ProblemsController < ApplicationController
   end
 
   def create_issue
-    IssueTracker.update_url_options(request)
-    issue_creation = IssueCreation.new(problem, current_user, params[:tracker])
+    issue = Issue.new(problem: problem, user: current_user)
+    issue.body = render_to_string(*issue.render_body_args)
 
-    unless issue_creation.execute
-      flash[:error] = issue_creation.errors.full_messages.join(', ')
+    unless issue.save
+      flash[:error] = issue.errors.full_messages.join(', ')
     end
 
     redirect_to app_problem_path(app, problem)
@@ -79,7 +73,7 @@ class ProblemsController < ApplicationController
 
   def resolve
     problem.resolve!
-    flash[:success] = 'Great news everyone! The err has been resolved.'
+    flash[:success] = 'Great news everyone! The error has been resolved.'
     redirect_to :back
   rescue ActionController::RedirectBackError
     redirect_to app_path(app)
@@ -124,6 +118,14 @@ class ProblemsController < ApplicationController
     redirect_to :back
   end
 
+  def destroy_all
+    nb_problem_destroy = ProblemDestroy.execute(app.problems)
+    flash[:success] = "#{I18n.t(:n_errs_have, :count => nb_problem_destroy)} been deleted."
+    redirect_to :back
+  rescue ActionController::RedirectBackError
+    redirect_to app_path(app)
+  end
+
   def search
     ps = Problem.search(params[:search]).for_apps(app_scope).in_env(params[:environment]).all_else_unresolved(params[:all_errs]).ordered_by(params_sort, params_order)
     selected_problems = params[:problems] || []
@@ -146,4 +148,3 @@ class ProblemsController < ApplicationController
     end
   end
 end
-
